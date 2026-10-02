@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Boletim em Dia</title>
+</head>
+<body>
+<style>
+/* Layout concept: single-page step flow (Upload -> Conferência -> Configurar -> Relatório),
+   centered card for steps 1-3, full-bleed scrollable table for the report step. */
+:root{
+  --bg:#eef1f3; --surface:#ffffff; --surface-2:#f4f6f7;
+  --text:#1c2630; --text-muted:#5b6b78;
+  --accent:#1d5c63; --accent-contrast:#ffffff; --accent-soft:#dcebe9;
+  --border:#d7dee2;
+  --danger-bg:#fbe4e1; --danger-text:#8a2c20; --danger-border:#eec3bc;
+  --warning-bg:#fbf1dc; --warning-text:#7a5a10;
+  --success-text:#2f7d4f;
+  --font-display:'IBM Plex Sans',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121a1f; --surface:#192329; --surface-2:#1f2a31;
+    --text:#e7edf0; --text-muted:#9fb0ba;
+    --accent:#5fb8ae; --accent-contrast:#0b1a19; --accent-soft:#1d3634;
+    --border:#2c3943;
+    --danger-bg:#3a2320; --danger-text:#f2a89c; --danger-border:#5c342c;
+    --warning-bg:#3a2f16; --warning-text:#e8c272;
+    --success-text:#7fd3a0;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121a1f; --surface:#192329; --surface-2:#1f2a31;
+  --text:#e7edf0; --text-muted:#9fb0ba;
+  --accent:#5fb8ae; --accent-contrast:#0b1a19; --accent-soft:#1d3634;
+  --border:#2c3943;
+  --danger-bg:#3a2320; --danger-text:#f2a89c; --danger-border:#5c342c;
+  --warning-bg:#3a2f16; --warning-text:#e8c272;
+  --success-text:#7fd3a0;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:var(--font-display);margin:0;padding-inline:16px;padding-block:28px}
+.wrap{max-width:1180px;margin:0 auto}
+h1,h2,h3{text-wrap:balance;font-weight:650;margin:0}
+.app-header{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.app-mark{width:38px;height:38px;border-radius:10px;background:var(--accent);color:var(--accent-contrast);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex:none}
+.app-title{font-size:19px;font-weight:650}
+.app-sub{font-size:13px;color:var(--text-muted)}
+
+.stepper{display:flex;gap:6px;margin-bottom:26px;flex-wrap:wrap}
+.step-chip{display:flex;align-items:center;gap:8px;padding:7px 14px 7px 8px;border-radius:999px;background:var(--surface);border:1px solid var(--border);font-size:13px;color:var(--text-muted)}
+.step-chip .num{width:20px;height:20px;border-radius:50%;background:var(--surface-2);color:var(--text-muted);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none}
+.step-chip.active{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
+.step-chip.active .num{background:var(--accent);color:var(--accent-contrast)}
+.step-chip.done .num{background:var(--success-text);color:var(--accent-contrast)}
+.step-chip.done{color:var(--text)}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:28px;min-width:0}
+.card + .card{margin-top:16px}
+
+/* Step 1: upload */
+.dropzone{border:2px dashed var(--border);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+.dropzone:hover,.dropzone.drag{border-color:var(--accent);background:var(--accent-soft)}
+.dropzone input{display:none}
+.dz-icon{font-size:30px;margin-bottom:10px}
+.dz-title{font-weight:600;font-size:15px;margin-bottom:4px}
+.dz-sub{font-size:13px;color:var(--text-muted)}
+.privacy-note{display:flex;gap:10px;align-items:flex-start;margin-top:18px;padding:14px 16px;background:var(--surface-2);border-radius:10px;font-size:13px;color:var(--text-muted);line-height:1.5}
+.privacy-note b{color:var(--text)}
+.skip-warning{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px;padding:14px 16px;background:var(--warning-bg);color:var(--warning-text);border-radius:10px;font-size:13px;line-height:1.5}
+.skip-warning b{color:inherit}
+
+/* Progress */
+.progress-row{display:flex;align-items:center;gap:14px}
+.spinner{width:22px;height:22px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-track{flex:1;height:8px;border-radius:999px;background:var(--surface-2);overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);transition:width .15s}
+
+/* Buttons */
+.btn{appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:14px;font-weight:600;padding:10px 18px;border-radius:10px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn-primary{background:var(--accent);color:var(--accent-contrast);border-color:var(--accent)}
+.btn-primary:hover{filter:brightness(1.06)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
+.btn-ghost{background:transparent}
+
+/* Step 2: conference */
+.summary-line{font-size:14px;color:var(--text-muted);margin-bottom:16px}
+.summary-line b{color:var(--text)}
+table.conf{width:100%;border-collapse:collapse;font-size:13.5px}
+table.conf th{text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);padding:8px 10px;border-bottom:1px solid var(--border)}
+table.conf td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+table.conf tr:last-child td{border-bottom:none}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px}
+.badge-ok{background:var(--accent-soft);color:var(--success-text)}
+.badge-warn{background:var(--warning-bg);color:var(--warning-text)}
+.mismatch-detail{font-size:12.5px;color:var(--text-muted);margin-top:4px;font-family:var(--font-mono)}
+
+/* Step 3: column picker */
+.preset-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:24px}
+.preset-card{border:1.5px solid var(--border);border-radius:12px;padding:16px;text-align:left;background:var(--surface);cursor:pointer;font-family:inherit}
+.preset-card:hover{border-color:var(--accent)}
+.preset-card.active{border-color:var(--accent);background:var(--accent-soft)}
+.preset-card .pc-title{font-weight:650;font-size:14.5px;margin-bottom:4px}
+.preset-card .pc-desc{font-size:12.5px;color:var(--text-muted);line-height:1.45}
+.custom-label{font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin:4px 0 10px}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap}
+.pill{border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 16px;border-radius:999px;cursor:pointer}
+.pill.active{background:var(--accent);border-color:var(--accent);color:var(--accent-contrast)}
+.pill-quick{background:var(--surface-2);font-size:12.5px;padding:7px 14px}
+.pill-quick.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.subject-group{margin-bottom:10px}
+.subject-group-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);margin-bottom:6px}
+.subject-pill{font-size:12.5px;padding:7px 14px}
+
+/* Step 4: report */
+.report-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.report-meta{font-size:13px;color:var(--text-muted)}
+.report-meta b{color:var(--text)}
+.table-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:12px}
+table.report{border-collapse:collapse;font-size:12.5px;font-family:var(--font-mono);min-width:100%}
+table.report th,table.report td{border:1px solid var(--border);padding:6px 8px;text-align:center;white-space:nowrap}
+table.report thead th{background:var(--surface-2);font-family:var(--font-display);font-weight:650}
+table.report td.name-cell,table.report th.name-cell{text-align:left;font-family:var(--font-display);position:sticky;left:0;background:var(--surface);z-index:1;font-weight:600}
+table.report thead th.name-cell{background:var(--surface-2);z-index:2}
+table.report td.low{background:var(--danger-bg);color:var(--danger-text);font-weight:700}
+table.report td.media-col{font-weight:700;border-left:2px solid var(--border)}
+table.report th.area-head{background:var(--accent-soft);font-family:var(--font-display)}
+
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 18px;border-radius:10px;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+
+[hidden]{display:none!important}
+@media (max-width:640px){ .card{padding:18px} }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650;700&family=IBM+Plex+Mono:wght@400;600;700&display=swap">
+
+<div class="wrap">
+  <div class="app-header">
+    <div class="app-mark">BD</div>
+    <div>
+      <div class="app-title">Boletim em Dia</div>
+      <div class="app-sub">Transforma os boletins em PDF da turma numa planilha de acompanhamento</div>
+    </div>
+  </div>
+
+  <div class="stepper" id="stepper"></div>
+
+  <!-- STEP 1: upload -->
+  <section class="card" id="step-upload">
+    <h2 style="font-size:17px;margin-bottom:6px">Envie o PDF de boletins da turma</h2>
+    <p style="font-size:13.5px;color:var(--text-muted);margin:0 0 18px">Aquele arquivo com uma Ficha Individual por aluno, do jeito que sai direto do sistema da SEDUC.</p>
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="application/pdf">
+      <div class="dz-icon">📄</div>
+      <div class="dz-title">Arraste o PDF aqui ou clique para escolher</div>
+      <div class="dz-sub">Um único arquivo, com todos os alunos da turma</div>
+    </label>
+    <div class="privacy-note">
+      <span>🔒</span>
+      <div><b>O boletim não sai do seu navegador.</b> A leitura do PDF e a montagem da planilha acontecem aqui mesmo, no seu computador — nada é enviado para nenhum servidor.</div>
+    </div>
+  </section>
+
+  <!-- STEP 1b: progress -->
+  <section class="card" id="step-progress" hidden>
+    <h2 style="font-size:17px;margin-bottom:16px">Lendo o boletim…</h2>
+    <div class="progress-row">
+      <div class="spinner"></div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div id="progressLabel" style="font-size:13px;color:var(--text-muted);min-width:90px;text-align:right">página 0</div>
+    </div>
+  </section>
+
+  <!-- STEP 2: conference -->
+  <section class="card" id="step-conference" hidden>
+    <h2 style="font-size:17px;margin-bottom:4px">Confira os dados extraídos</h2>
+    <div class="summary-line" id="confSummary"></div>
+    <div class="skip-warning" id="confSkipWarning" hidden></div>
+    <div style="max-height:420px;overflow:auto">
+      <table class="conf">
+        <thead><tr><th style="width:36px">#</th><th>Aluno</th><th>Situação</th></tr></thead>
+        <tbody id="confBody"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btnBackUpload">← Enviar outro arquivo</button>
+      <button class="btn btn-primary" id="btnToConfig">Continuar para o relatório →</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: config -->
+  <section class="card" id="step-config" hidden>
+    <h2 style="font-size:17px;margin-bottom:4px">O que vai aparecer no relatório?</h2>
+    <p style="font-size:13.5px;color:var(--text-muted);margin:0 0 18px">Escolha um atalho pronto, ou personalize quais avaliações mostrar.</p>
+    <div class="preset-row" id="presetRow"></div>
+    <div class="custom-label">Personalizar colunas</div>
+    <div class="pill-row" id="pillRow"></div>
+
+    <div class="custom-label" style="margin-top:22px">Disciplinas no relatório</div>
+    <div class="pill-row" id="subjectQuickRow" style="margin-bottom:12px"></div>
+    <div id="subjectGroups"></div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="btnBackConf">← Voltar</button>
+      <button class="btn btn-primary" id="btnToReport">Gerar relatório →</button>
+    </div>
+  </section>
+
+  <!-- STEP 4: report -->
+  <section id="step-report" hidden>
+    <div class="card" style="margin-bottom:16px">
+      <div class="report-toolbar">
+        <div class="report-meta" id="reportMeta"></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-ghost" id="btnBackConfig">← Ajustar colunas</button>
+          <button class="btn" id="btnXlsx">⬇ Baixar planilha (.xlsx)</button>
+          <button class="btn" id="btnPdf">⬇ Baixar PDF para impressão</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:16px">
+      <div class="table-scroll"><table class="report" id="reportTable"></table></div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+/* ---------------------------------------------------------------------
+   Domain model: the 12 disciplines of the SEDUC-PA "Ficha Individual",
+   in the fixed order they appear on the form, grouped by área de
+   conhecimento (used for print pagination and the xlsx header).
+--------------------------------------------------------------------- */
+const SUBJECTS = [
+  { code:"2399", name:"Artes", short:"ART", area:"Linguagens" },
+  { code:"1008", name:"Educação Física", short:"EDU FIS", area:"Linguagens" },
+  { code:"7585", name:"Língua Inglesa", short:"LÍN ING", area:"Linguagens" },
+  { code:"7580", name:"Língua Portuguesa", short:"LÍN POR", area:"Linguagens" },
+  { code:"2006", name:"Matemática", short:"MAT", area:"Matemática" },
+  { code:"2034", name:"Biologia", short:"BIO", area:"Ciências da Natureza" },
+  { code:"2036", name:"Física", short:"FÍS", area:"Ciências da Natureza" },
+  { code:"2035", name:"Química", short:"QUÍ", area:"Ciências da Natureza" },
+  { code:"2043", name:"Filosofia", short:"FIL", area:"Ciências Humanas" },
+  { code:"2003", name:"Geografia", short:"GEO", area:"Ciências Humanas" },
+  { code:"2002", name:"História", short:"HIST", area:"Ciências Humanas" },
+  { code:"2038", name:"Sociologia", short:"SOC", area:"Ciências Humanas" },
+];
+const AREAS = ["Linguagens","Matemática","Ciências da Natureza","Ciências Humanas"];
+const ALL_SUBJECT_CODES = SUBJECTS.map(s=>s.code);
+
+const COLUMN_DEFS = [
+  { key:"av1", label:"1ª AV" },
+  { key:"av2", label:"2ª AV" },
+  { key:"recparc", label:"Rec. Parcial" },
+  { key:"av3", label:"3ª AV" },
+  { key:"av4", label:"4ª AV" },
+  { key:"recpar2", label:"Rec. Parcial 2" },
+  { key:"recfin", label:"Rec. Final" },
+  { key:"media", label:"Média Anual" },
+];
+
+const PRESETS = {
+  resumido: { label:"Boletim Resumido", desc:"Só a Média Final de cada disciplina.", cols:["media"] },
+  padrao: { label:"Acompanhamento Padrão", desc:"1ª AV, 2ª AV e a Recuperação Parcial.", cols:["av1","av2","recparc"] },
+  completo: { label:"Visão Completa", desc:"Todas as avaliações, recuperações e a Média Anual.", cols:["av1","av2","recparc","av3","av4","recpar2","recfin","media"] },
+};
+
+/* ---------------------------------------------------------------------
+   PDF parsing — positional text extraction tuned to the real layout
+   of the SEDUC-PA "Ficha Individual" (validated against a 37-student
+   sample: 338/341 médias matched the printed value exactly; the 3
+   exceptions were exact AV1=AV2 ties, caught by the cross-check below).
+--------------------------------------------------------------------- */
+const COL_RANGES = [
+  { key:"ch", x0:182, x1:208 }, { key:"cred", x0:208, x1:237 },
+  { key:"av1", x0:237, x1:261 }, { key:"av2", x0:261, x1:286 },
+  { key:"recparc", x0:286, x1:311 }, { key:"av3", x0:311, x1:334 },
+  { key:"av4", x0:334, x1:355 }, { key:"recpar2", x0:355, x1:376 },
+  { key:"recfin", x0:376, x1:399 }, { key:"totalpont", x0:399, x1:426 },
+  { key:"media", x0:426, x1:458 }, { key:"totalfalta", x0:458, x1:487 },
+  { key:"freq", x0:487, x1:515 }, { key:"result", x0:515, x1:595 },
+];
+function colFor(x){ for(const c of COL_RANGES) if(x>=c.x0 && x<c.x1) return c.key; return null; }
+function numOrNull(s){
+  if(s===undefined||s===null) return null;
+  const t=String(s).trim();
+  if(t===""||t==="-") return null;
+  const v=parseFloat(t.replace(",", "."));
+  return Number.isNaN(v) ? null : v;
+}
+
+async function extractPage(page){
+  const viewport = page.getViewport({ scale: 1 });
+  const H = viewport.height;
+  const content = await page.getTextContent();
+  const items = content.items.map(it=>({
+    str: it.str,
+    x: Math.round(it.transform[4]*10)/10,
+    top: Math.round((H - it.transform[5] - it.height)*10)/10,
+  })).filter(it=>it.str.trim().length>0);
+
+  function findLabelValue(label){
+    const hit = items.find(it=>it.str.trim().startsWith(label));
+    if(!hit) return null;
+    const sameRow = items.filter(it=>Math.abs(it.top-hit.top)<1.5).sort((a,b)=>a.x-b.x);
+    return sameRow.map(it=>it.str).join(" ").trim();
+  }
+  const turmaLine = findLabelValue("TURMA:");
+  const escolaLine = findLabelValue("ESCOLA:");
+  const alunoLine = findLabelValue("ALUNO:");
+
+  let nome = null, matricula = null;
+  if(alunoLine){
+    // matrícula nem sempre vem preenchida (ex.: aluno recém-matriculado) — número é opcional
+    const m = alunoLine.match(/ALUNO:\s*(?:(\d+)\s*-\s*)?(.+)/);
+    if(m){ matricula = m[1] || null; nome = m[2].trim(); }
+  }
+  let turma=null, turno=null, ano=null;
+  if(turmaLine){
+    const mt = turmaLine.match(/TURMA:\s*(\S+)/); if(mt) turma = mt[1];
+    const mo = turmaLine.match(/TURNO:\s*(\S+)/); if(mo) turno = mo[1];
+    const ma = turmaLine.match(/ANO:\s*(\d+)/); if(ma) ano = ma[1];
+  }
+  let escola = null;
+  if(escolaLine){
+    const me = escolaLine.match(/ESCOLA:\s*(.+)/); if(me) escola = me[1].trim();
+  }
+
+  const codeRe = /^(\d{4})\s*-\s*(.*)$/;
+  const codeItems = items.filter(it=>it.x>=85 && it.x<=105 && codeRe.test(it.str.trim()) && it.top>140 && it.top<430)
+    .sort((a,b)=>a.top-b.top);
+
+  const subjectsByCode = {};
+  for(let i=0;i<codeItems.length;i++){
+    const m = codeItems[i].str.trim().match(codeRe);
+    const codeTop = codeItems[i].top;
+    const nextTopRaw = i+1<codeItems.length ? codeItems[i+1].top : codeTop+30;
+    const windowEnd = Math.min(nextTopRaw-1, codeTop+30);
+    const chCandidates = items.filter(it=>it.x>=182 && it.x<208 && it.top>=codeTop-1 && it.top<=windowEnd).sort((a,b)=>a.top-b.top);
+    const dataTop = chCandidates.length ? chCandidates[0].top : codeTop;
+    const row = {};
+    for(const it of items){
+      if(it.x>=182 && Math.abs(it.top-dataTop)<1.0){
+        const key = colFor(it.x);
+        if(key) row[key]=it.str.trim();
+      }
+    }
+    subjectsByCode[m[1]] = {
+      av1:numOrNull(row.av1), av2:numOrNull(row.av2), recparc:numOrNull(row.recparc),
+      av3:numOrNull(row.av3), av4:numOrNull(row.av4), recpar2:numOrNull(row.recpar2),
+      recfin:numOrNull(row.recfin), media_impressa:numOrNull(row.media),
+    };
+  }
+  return { nome, matricula, escola, turma, turno, ano, subjectsByCode };
+}
+
+/* ---------------------------------------------------------------------
+   Grading rules: REC PARC substitutes the lower of AV1/AV2 when
+   greater; REC PAR 2 substitutes the lower of AV3/AV4; REC FIN
+   substitutes the lowest of all four. Média Anual = official SEDUC-PA
+   weighted formula over the resulting (post-substitution) grades.
+--------------------------------------------------------------------- */
+function computeEfetiva(subj){
+  if(!subj) return { e:[0,0,0,0], media:0, media_impressa:null, mismatch:false };
+  let e1=subj.av1??0, e2=subj.av2??0, e3=subj.av3??0, e4=subj.av4??0;
+  if(subj.recparc!=null){
+    if(e1<=e2){ if(subj.recparc>e1) e1=subj.recparc; } else { if(subj.recparc>e2) e2=subj.recparc; }
+  }
+  if(subj.recpar2!=null){
+    if(e3<=e4){ if(subj.recpar2>e3) e3=subj.recpar2; } else { if(subj.recpar2>e4) e4=subj.recpar2; }
+  }
+  if(subj.recfin!=null){
+    const vals=[e1,e2,e3,e4];
+    const idx=vals.indexOf(Math.min(...vals));
+    if(subj.recfin>vals[idx]) vals[idx]=subj.recfin;
+    [e1,e2,e3,e4]=vals;
+  }
+  const media = Math.round(((e1*2+e2*3+e3*2+e4*3)/10)*10)/10;
+  const mismatch = subj.media_impressa!=null && Math.abs(media-subj.media_impressa)>0.15;
+  return { e:[e1,e2,e3,e4], media, media_impressa:subj.media_impressa, mismatch };
+}
+
+/* ---------------------------------------------------------------------
+   App state + wiring
+--------------------------------------------------------------------- */
+const state = {
+  step: "upload", // upload | progress | conference | config | report
+  turmaInfo: null,
+  students: [], // { nome, matricula, subjects: { code: raw }, efetivas: { code: computed } }
+  skippedPages: [], // páginas que não puderam ser lidas automaticamente
+  selectedCols: [...PRESETS.padrao.cols],
+  activePreset: "padrao",
+  selectedSubjects: [...ALL_SUBJECT_CODES],
+};
+
+const $ = sel => document.querySelector(sel);
+function showToast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(showToast._t); showToast._t = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+
+const STEPS = [
+  { key:"upload", label:"Enviar PDF" },
+  { key:"conference", label:"Conferência" },
+  { key:"config", label:"Colunas" },
+  { key:"report", label:"Relatório" },
+];
+function renderStepper(){
+  const order = ["upload","conference","config","report"];
+  const activeIdx = order.indexOf(state.step==="progress" ? "upload" : state.step);
+  $("#stepper").innerHTML = STEPS.map((s,i)=>{
+    const cls = i===activeIdx ? "active" : (i<activeIdx ? "done" : "");
+    return `<div class="step-chip ${cls}"><span class="num">${i<activeIdx?"✓":i+1}</span>${s.label}</div>`;
+  }).join("");
+}
+
+function setStep(step){
+  state.step = step;
+  for(const id of ["step-upload","step-progress","step-conference","step-config","step-report"]){
+    $("#"+id).hidden = true;
+  }
+  const map = { upload:"step-upload", progress:"step-progress", conference:"step-conference", config:"step-config", report:"step-report" };
+  $("#"+map[step]).hidden = false;
+  renderStepper();
+}
+
+/* ---- Step 1: upload ---- */
+const dropzone = $("#dropzone"), fileInput = $("#fileInput");
+dropzone.addEventListener("dragover", e=>{ e.preventDefault(); dropzone.classList.add("drag"); });
+dropzone.addEventListener("dragleave", ()=> dropzone.classList.remove("drag"));
+dropzone.addEventListener("drop", e=>{
+  e.preventDefault(); dropzone.classList.remove("drag");
+  const f = e.dataTransfer.files[0];
+  if(f) handleFile(f);
+});
+fileInput.addEventListener("change", e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+async function handleFile(file){
+  if(file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
+    showToast("Esse arquivo não parece ser um PDF."); return;
+  }
+  setStep("progress");
+  try{
+    const buf = await file.arrayBuffer();
+    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+    const students = [];
+    const skippedPages = [];
+    let turmaInfo = null;
+    for(let p=1; p<=doc.numPages; p++){
+      $("#progressLabel").textContent = `página ${p} de ${doc.numPages}`;
+      $("#progressFill").style.width = Math.round((p/doc.numPages)*100)+"%";
+      const page = await doc.getPage(p);
+      const data = await extractPage(page);
+      if(!data.nome){ skippedPages.push(p); continue; } // não deu pra identificar o aluno nessa página — avisa em vez de sumir com o dado
+      if(!turmaInfo) turmaInfo = { escola:data.escola, turma:data.turma, turno:data.turno, ano:data.ano };
+      const efetivas = {};
+      for(const subj of SUBJECTS) efetivas[subj.code] = computeEfetiva(data.subjectsByCode[subj.code]);
+      students.push({ nome:data.nome, matricula:data.matricula, subjects:data.subjectsByCode, efetivas });
+      await new Promise(r=>setTimeout(r,0)); // let the UI paint
+    }
+    if(students.length===0){ showToast("Não encontrei nenhuma Ficha Individual nesse PDF."); setStep("upload"); return; }
+    state.turmaInfo = turmaInfo;
+    state.students = students;
+    state.skippedPages = skippedPages;
+    renderConference();
+    setStep("conference");
+  }catch(err){
+    console.error(err);
+    showToast("Não consegui ler esse PDF. Confira se é o boletim certo.");
+    setStep("upload");
+  }
+}
+
+/* ---- Step 2: conference ---- */
+function renderConference(){
+  const withIssues = state.students.filter(s => SUBJECTS.some(subj => s.efetivas[subj.code].mismatch));
+  $("#confSummary").innerHTML = `<b>${state.students.length} alunos</b> lidos de <b>${state.turmaInfo.turma||"turma"}</b>. ` +
+    (withIssues.length ? `<b>${withIssues.length}</b> com alguma média para conferir manualmente.` : `Nenhuma divergência encontrada — tudo bateu com o PDF.`);
+  const skipEl = $("#confSkipWarning");
+  if(state.skippedPages && state.skippedPages.length){
+    skipEl.hidden = false;
+    const pags = state.skippedPages.join(", ");
+    skipEl.innerHTML = `<span>⚠</span><span><b>${state.skippedPages.length} página(s) do PDF não entraram na lista</b> (página${state.skippedPages.length>1?"s":""} ${pags}) — não consegui reconhecer o nome do aluno automaticamente nelas (comum quando falta o número de matrícula no boletim). Abra essa(s) página(s) no PDF original e adicione esse(s) aluno(s) manualmente à planilha.</span>`;
+  } else {
+    skipEl.hidden = true;
+    skipEl.innerHTML = "";
+  }
+  $("#confBody").innerHTML = state.students.map((s,i)=>{
+    const issues = SUBJECTS.filter(subj => s.efetivas[subj.code].mismatch);
+    const badge = issues.length
+      ? `<span class="badge badge-warn">⚠ conferir ${issues.length}</span>`
+      : `<span class="badge badge-ok">✓ ok</span>`;
+    const detail = issues.length
+      ? `<div class="mismatch-detail">${issues.map(subj=>{
+          const e = s.efetivas[subj.code];
+          return `${subj.short}: calculado ${e.media.toFixed(1).replace(".",",")} · boletim ${e.media_impressa.toFixed(1).replace(".",",")}`;
+        }).join(" · ")}</div>`
+      : "";
+    return `<tr><td>${i+1}</td><td>${s.nome}${detail}</td><td>${badge}</td></tr>`;
+  }).join("");
+}
+
+/* ---- Step 3: config ---- */
+function renderConfig(){
+  $("#presetRow").innerHTML = Object.entries(PRESETS).map(([key,p])=>
+    `<button class="preset-card ${state.activePreset===key?"active":""}" data-preset="${key}">
+      <div class="pc-title">${p.label}</div><div class="pc-desc">${p.desc}</div>
+    </button>`).join("");
+  $("#pillRow").innerHTML = COLUMN_DEFS.map(c=>
+    `<button class="pill ${state.selectedCols.includes(c.key)?"active":""}" data-col="${c.key}">${c.label}</button>`).join("");
+
+  $("#presetRow").querySelectorAll(".preset-card").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      state.activePreset = btn.dataset.preset;
+      state.selectedCols = [...PRESETS[state.activePreset].cols];
+      renderConfig();
+    });
+  });
+  $("#pillRow").querySelectorAll(".pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const col = btn.dataset.col;
+      if(state.selectedCols.includes(col)) state.selectedCols = state.selectedCols.filter(c=>c!==col);
+      else state.selectedCols.push(col);
+      state.activePreset = null;
+      renderConfig();
+    });
+  });
+
+  const quickOptions = [
+    { key:"todas", label:"Todas as disciplinas", codes:[...ALL_SUBJECT_CODES] },
+    ...AREAS.map(area => ({ key:area, label:area, codes: SUBJECTS.filter(s=>s.area===area).map(s=>s.code) })),
+  ];
+  $("#subjectQuickRow").innerHTML = quickOptions.map(q=>{
+    const allSelected = q.codes.every(c=>state.selectedSubjects.includes(c));
+    return `<button class="pill pill-quick ${allSelected?"active":""}" data-quick="${q.key}">${q.label}</button>`;
+  }).join("");
+  $("#subjectQuickRow").querySelectorAll(".pill-quick").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const q = quickOptions.find(o=>o.key===btn.dataset.quick);
+      if(q.key==="todas"){
+        state.selectedSubjects = [...ALL_SUBJECT_CODES];
+      } else {
+        const allSelected = q.codes.every(c=>state.selectedSubjects.includes(c));
+        if(allSelected) state.selectedSubjects = state.selectedSubjects.filter(c=>!q.codes.includes(c));
+        else state.selectedSubjects = [...new Set([...state.selectedSubjects, ...q.codes])];
+      }
+      renderConfig();
+    });
+  });
+
+  $("#subjectGroups").innerHTML = AREAS.map(area=>{
+    const pills = SUBJECTS.filter(s=>s.area===area).map(s=>
+      `<button class="pill subject-pill ${state.selectedSubjects.includes(s.code)?"active":""}" data-subj="${s.code}">${s.name}</button>`
+    ).join("");
+    return `<div class="subject-group"><div class="subject-group-label">${area}</div><div class="pill-row">${pills}</div></div>`;
+  }).join("");
+  $("#subjectGroups").querySelectorAll(".subject-pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      const code = btn.dataset.subj;
+      if(state.selectedSubjects.includes(code)) state.selectedSubjects = state.selectedSubjects.filter(c=>c!==code);
+      else state.selectedSubjects.push(code);
+      renderConfig();
+    });
+  });
+}
+
+/* ---- Step 4: report ---- */
+function orderedSelectedCols(){
+  return COLUMN_DEFS.filter(c=>state.selectedCols.includes(c.key));
+}
+function orderedSelectedSubjects(){
+  return SUBJECTS.filter(s=>state.selectedSubjects.includes(s.code));
+}
+function cellValue(student, subjCode, colKey){
+  const subj = student.subjects[subjCode];
+  const eff = student.efetivas[subjCode];
+  if(colKey==="media") return eff.media;
+  return subj ? subj[colKey] : null;
+}
+function fmt(v){ return v==null ? "" : v.toFixed(1).replace(".", ","); }
+
+function renderReport(){
+  const cols = orderedSelectedCols();
+  const subjects = orderedSelectedSubjects();
+  if(cols.length===0 || subjects.length===0){ $("#reportTable").innerHTML = "<tr><td>Selecione ao menos uma disciplina e uma coluna.</td></tr>"; return; }
+  const t = state.turmaInfo;
+  $("#reportMeta").innerHTML = `<b>${t.turma||"Turma"}</b> · Turno ${t.turno||"-"} · ${t.ano||""} · ${state.students.length} alunos`;
+
+  let head1 = `<tr><th class="name-cell" rowspan="2">Aluno</th>`;
+  let head2 = `<tr>`;
+  for(const subj of subjects){
+    head1 += `<th class="area-head" colspan="${cols.length}">${subj.short}</th>`;
+    for(const c of cols) head2 += `<th>${c.label}</th>`;
+  }
+  head1 += `</tr>`; head2 += `</tr>`;
+
+  let body = "";
+  state.students.forEach((s,i)=>{
+    body += `<tr><td class="name-cell">${i+1}. ${s.nome}</td>`;
+    for(const subj of subjects){
+      for(const c of cols){
+        const v = cellValue(s, subj.code, c.key);
+        const low = v!=null && v<5;
+        const mediaCls = c.key==="media" ? " media-col" : "";
+        body += `<td class="${low?"low":""}${mediaCls}">${fmt(v)}</td>`;
+      }
+    }
+    body += `</tr>`;
+  });
+  $("#reportTable").innerHTML = `<thead>${head1}${head2}</thead><tbody>${body}</tbody>`;
+}
+
+/* ---- Navigation ---- */
+$("#btnBackUpload").addEventListener("click", ()=>{ fileInput.value=""; setStep("upload"); });
+$("#btnToConfig").addEventListener("click", ()=>{ renderConfig(); setStep("config"); });
+$("#btnBackConf").addEventListener("click", ()=> setStep("conference"));
+$("#btnToReport").addEventListener("click", ()=>{ renderReport(); setStep("report"); });
+$("#btnBackConfig").addEventListener("click", ()=>{ renderConfig(); setStep("config"); });
+
+/* ---------------------------------------------------------------------
+   Exports
+--------------------------------------------------------------------- */
+async function buildWorkbook(){
+  const cols = orderedSelectedCols();
+  const subjects = orderedSelectedSubjects();
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Acompanhamento");
+  const t = state.turmaInfo;
+  ws.addRow([`Turma ${t.turma||""}`, `Turno ${t.turno||""}`, `Ano ${t.ano||""}`, t.escola||""]);
+  ws.addRow([]);
+  const headRowIdx = 3;
+  const head1 = ws.getRow(headRowIdx), head2 = ws.getRow(headRowIdx+1);
+  head1.getCell(1).value = "Aluno";
+  ws.mergeCells(headRowIdx, 1, headRowIdx+1, 1);
+  let col = 2;
+  for(const subj of subjects){
+    head1.getCell(col).value = subj.short;
+    ws.mergeCells(headRowIdx, col, headRowIdx, col+cols.length-1);
+    for(let j=0;j<cols.length;j++) head2.getCell(col+j).value = cols[j].label;
+    col += cols.length;
+  }
+  [head1, head2].forEach(r=>{ r.eachCell(c=>{ c.font={bold:true}; c.alignment={horizontal:"center",vertical:"middle"}; c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFE9EEEF"}}; }); });
+
+  state.students.forEach((s,i)=>{
+    const row = ws.getRow(headRowIdx+2+i);
+    row.getCell(1).value = `${i+1}. ${s.nome}`;
+    let c = 2;
+    for(const subj of subjects){
+      for(const cdef of cols){
+        const v = cellValue(s, subj.code, cdef.key);
+        const cell = row.getCell(c);
+        cell.value = v==null ? null : v;
+        cell.alignment = { horizontal:"center" };
+        if(v!=null && v<5) cell.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FFFBE4E1"} };
+        c++;
+      }
+    }
+  });
+  ws.getColumn(1).width = 34;
+  for(let c=2;c<col;c++) ws.getColumn(c).width = 10;
+  ws.views = [{ state:"frozen", xSplit:1, ySplit:headRowIdx+1 }];
+  return wb;
+}
+
+function sanitizePdfText(s){
+  // pdf-lib's standard fonts only support WinAnsi; a few common "smart"
+  // punctuation characters fail its encoder even though they look harmless.
+  return String(s)
+    .replace(/[…]/g, "...")
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[–—]/g, "-")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+}
+
+async function buildPrintPdf(){
+  const { PDFDocument, rgb, StandardFonts } = PDFLib;
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const cols = orderedSelectedCols();
+  const PAGE_W = 842, PAGE_H = 595; // A4 landscape, points
+  const MARGIN = 28;
+  const NAME_W = 170;
+  const rowH = 15;
+
+  const selectedSubjects = orderedSelectedSubjects();
+  for(const area of AREAS){
+    const subjectsInArea = selectedSubjects.filter(s=>s.area===area);
+    if(subjectsInArea.length===0) continue; // nenhuma disciplina dessa área foi incluída no relatório
+    const availW = PAGE_W - MARGIN*2 - NAME_W;
+    const colW = Math.max(34, availW / (subjectsInArea.length*cols.length));
+    const rowsPerPage = Math.floor((PAGE_H - MARGIN*2 - 70) / rowH);
+
+    for(let start=0; start<state.students.length; start+=rowsPerPage){
+      const chunk = state.students.slice(start, start+rowsPerPage);
+      const page = pdf.addPage([PAGE_W, PAGE_H]);
+      let y = PAGE_H - MARGIN;
+      page.drawText(sanitizePdfText(`${state.turmaInfo.turma||"Turma"} - ${area}`), { x:MARGIN, y, size:13, font:fontBold });
+      y -= 16;
+      page.drawText(sanitizePdfText(`${state.turmaInfo.escola||""} - Turno ${state.turmaInfo.turno||""} - ${state.turmaInfo.ano||""}`), { x:MARGIN, y, size:9, font, color:rgb(0.35,0.4,0.45) });
+      y -= 18;
+
+      // header row 1: subject names
+      let x = MARGIN + NAME_W;
+      page.drawText("Aluno", { x:MARGIN, y, size:9, font:fontBold });
+      for(const subj of subjectsInArea){
+        const w = colW*cols.length;
+        page.drawText(sanitizePdfText(subj.short), { x: x + w/2 - (subj.short.length*2.6), y, size:9, font:fontBold });
+        x += w;
+      }
+      y -= 12;
+      // header row 2: column labels
+      x = MARGIN + NAME_W;
+      for(const subj of subjectsInArea){
+        for(const c of cols){
+          page.drawText(sanitizePdfText(c.label.replace("Recuperação","Rec.")), { x: x + 2, y, size:6.5, font });
+          x += colW;
+        }
+      }
+      y -= 4;
+      page.drawLine({ start:{x:MARGIN,y}, end:{x:PAGE_W-MARGIN,y}, thickness:0.75, color:rgb(0.7,0.74,0.77) });
+      y -= 11;
+
+      chunk.forEach((s, idx)=>{
+        const name = `${start+idx+1}. ${s.nome}`;
+        page.drawText(sanitizePdfText(name.length>34 ? name.slice(0,33)+"..." : name), { x:MARGIN, y, size:8, font });
+        let xx = MARGIN + NAME_W;
+        for(const subj of subjectsInArea){
+          for(const c of cols){
+            const v = cellValue(s, subj.code, c.key);
+            if(v!=null && v<5){
+              page.drawRectangle({ x:xx, y:y-3, width:colW-2, height:rowH-3, color:rgb(0.98,0.89,0.88) });
+            }
+            page.drawText(sanitizePdfText(fmt(v)), { x:xx+3, y, size:7.5, font, color: v!=null && v<5 ? rgb(0.54,0.17,0.13) : rgb(0.11,0.15,0.19) });
+            xx += colW;
+          }
+        }
+        y -= rowH;
+      });
+    }
+  }
+  return pdf.save();
+}
+
+function blobDownloadFallback(blob, filename){
+  try{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+    setTimeout(()=>{ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+  }catch(e){ console.error(e); }
+}
+
+async function saveFile(filename, blob){
+  const downloads = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+  if(downloads){
+    try{
+      const res = await downloads.save({ filename, data: blob });
+      showToast(res.status==="saved" ? "Arquivo salvo." : "Arquivo enviado.");
+      return;
+    }catch(e){
+      if(e && e.code==="declined") return;
+      console.error(e);
+    }
+  }
+  blobDownloadFallback(blob, filename);
+}
+
+function reportIsEmpty(){
+  return orderedSelectedCols().length===0 || orderedSelectedSubjects().length===0;
+}
+$("#btnXlsx").addEventListener("click", async ()=>{
+  if(reportIsEmpty()){ showToast("Selecione ao menos uma disciplina e uma coluna."); return; }
+  $("#btnXlsx").disabled = true;
+  try{
+    const wb = await buildWorkbook();
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    await saveFile(`acompanhamento-${state.turmaInfo.turma||"turma"}.xlsx`, blob);
+  }catch(e){ console.error(e); showToast("Não consegui gerar a planilha."); }
+  $("#btnXlsx").disabled = false;
+});
+$("#btnPdf").addEventListener("click", async ()=>{
+  if(reportIsEmpty()){ showToast("Selecione ao menos uma disciplina e uma coluna."); return; }
+  $("#btnPdf").disabled = true;
+  try{
+    const bytes = await buildPrintPdf();
+    const blob = new Blob([bytes], { type:"application/pdf" });
+    await saveFile(`boletim-${state.turmaInfo.turma||"turma"}.pdf`, blob);
+  }catch(e){ console.error(e); showToast("Não consegui gerar o PDF."); }
+  $("#btnPdf").disabled = false;
+});
+
+renderStepper();
+</script>
+
+</body>
+</html>
